@@ -1,10 +1,23 @@
 #include <stdio.h>
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
-#define NUM_COLORS 12            // Number of color codes
-#define COLOR_NAME_MAX_LENGTH 10 // Max length of color name
-#define INVALID -1               // Used to indicate invalid value
+// Constants
+#define NUM_COLORS 12                            // Number of color codes
+#define COLOR_NAME_MAX_LENGTH 10                 // Max length of color name
+#define INVALID -1                               // Used to indicate invalid value
+#define MAX_ARGS 6                               // Max number of input arguments
+#define NUM_ARGS_4_BANDS (MAX_ARGS - 1)          // Number of input arguments for 4-band resistor
+#define NUM_ARGS_5_BANDS (MAX_ARGS)              // Number of input arguments for 5-band resistor
+#define MAX_VALUE_BANDS 3                        // Max number of value bands (5-band resistor has 3 value bands)
+#define NUM_VALUE_BANDS (argc - MAX_VALUE_BANDS) // Number of value bands
+
+// Error messages
+#define ERR_INVALID_COLOR "Invalid color code input: %s\n"
+#define ERR_INVALID_VALUE_BAND "Invalid color code input for value band: %s\n"
+#define ERR_INVALID_TOLERANCE "Invalid color code input for tolerance: %s\n"
+#define ERR_USAGE "Usage: %s <color1> <color2> <color3> <color4> [<color5>]\n"
 
 // Color structure
 typedef struct {
@@ -44,48 +57,58 @@ Color* getColor(const char* color) {
 // Main function
 int main(int argc, char *argv[]) {
     // Check input arguments
-    if (argc != 5 && argc != 6) {
-        printf("Usage: %s <color1> <color2> <color3> <color4> [<color5>]\n", argv[0]);
-        return 1;
+    if (argc != NUM_ARGS_4_BANDS && argc != NUM_ARGS_5_BANDS) {
+        printf(ERR_USAGE, argv[0]);
+        return EXIT_FAILURE;
     }
 
     // Initialize variables
-    int firstBand, secondBand, thirdBand = 0, exponent;
-    float tolerance;
+    int values[MAX_VALUE_BANDS] = { INVALID };
+    int exponent;
+    float tolerance = INVALID;
     int resistanceValue;
 
     // Retrieve colors and validate
-    Color *color1 = getColor(argv[1]);
-    Color *color2 = getColor(argv[2]);
-    Color *color3 = getColor(argv[3]);
-    Color *color4 = getColor(argv[4]);
-    Color *color5 = (argc == 6) ? getColor(argv[5]) : NULL;
+    Color *colors[MAX_ARGS] = { NULL };
+    for (int i = 1; i < argc; ++i) {
+        colors[i - 1] = getColor(argv[i]);
+        if (colors[i - 1] == NULL) {
+            printf(ERR_INVALID_COLOR, argv[i]);
+            return EXIT_FAILURE;
+        }
+    }
 
-    if (!color1 || !color2 || !color3 || !color4 || (argc == 6 && !color5)) {
-        printf("Invalid color code input.\n");
-        return 1;
+    // Assign values, exponent, and tolerance
+    values[0] = colors[0]->value;
+    values[1] = colors[1]->value;
+    values[2] = argc == MAX_ARGS ? colors[2]->value : INVALID;
+    exponent = colors[argc - 3]->exponent;
+    tolerance = colors[argc - 2]->tolerance;
+
+    // Check if value bands are invalid
+    for (int i = 0; i < NUM_VALUE_BANDS; i++) {
+        if (values[i] == INVALID) {
+            printf(ERR_INVALID_VALUE_BAND, argv[i + 1]);
+            return EXIT_FAILURE;
+        }
+    }
+
+    // Check if tolerance is invalid
+    if (tolerance == INVALID) {
+        printf(ERR_INVALID_TOLERANCE, argv[argc - 1]);
+        return EXIT_FAILURE;
     }
 
     // Calculate resistance value
-    firstBand = color1->value;
-    secondBand = color2->value;
-
-    if (argc == 5) { // 4-band resistor
-        exponent = color3->exponent;
-        tolerance = color4->tolerance;
-
-        resistanceValue = (firstBand * 10 + secondBand) * (int)pow(10, exponent);
+    if (argc == NUM_ARGS_4_BANDS) { // 4-band resistor
+        resistanceValue = (values[0] * 10 + values[1]) * (int)pow(10, exponent);
 
     } else { // 5-band resistor
-        thirdBand = color3->value;
-        exponent = color4->exponent;
-        tolerance = color5->tolerance;
-
-        resistanceValue = (firstBand * 100 + secondBand * 10 + thirdBand) * (int)pow(10, exponent);
+        resistanceValue = (values[0] * 100 + values[1] * 10 + values[2]) * (int)pow(10, exponent);
     }
 
     // Print resistance value
-    printf("Resistance: %d Ω ±%.2f%%\n", resistanceValue, tolerance);
+    printf("%d Ω ±%.2f%%\n", resistanceValue, tolerance);
 
-    return 0;
+    return EXIT_SUCCESS;
 }
